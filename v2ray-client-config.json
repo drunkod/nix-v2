@@ -1,0 +1,54 @@
+{
+  "log": {
+    "loglevel": "debug"
+  },
+  "inbounds": [
+    {
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": true,
+        "ip": "127.0.0.1"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "YOUR_SERVER_IP_OR_HOSTNAME",
+            "port": 8080,
+            "users": [
+              {
+                "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "alterId": 0,
+                "security": "auto"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/v2ray-endpoint",
+          "headers": {
+            "Host": "YOUR_SERVER_IP_OR_HOSTNAME"
+          }
+        }
+      },
+      "mux": {
+        "enabled": false
+      }
+    },
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    }
+  ]
+}
