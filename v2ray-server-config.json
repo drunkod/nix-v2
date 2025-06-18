@@ -14,7 +14,15 @@
       "https://drunkod-serverless-28.deno.dev/1:ABAACA=="
     ]
   },
-
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "protocol": ["dns"],
+        "outboundTag": "dns-out"
+      }
+    ]
+  },
   "inbounds": [
     {
       "port": 8080,
@@ -44,6 +52,10 @@
       "protocol": "freedom",
       "tag": "direct-out", 
       "settings": {}
+    },
+    {
+      "protocol": "dns",
+      "tag": "dns-out"
     }
   ]
 }
