@@ -2,18 +2,16 @@
   "log": {
     "access": "/dev/null",
     "error": "/dev/stderr",
-    "loglevel": "debug"
+    "loglevel": "warning"
   },
   
   "dns": {
     "servers": [
-      "https://1.1.1.1/dns-query",
-      "https://dns.google/dns-query"
+      "https://1.1.1.1/dns-query"
     ]
   },
 
   "routing": {
-    "domainStrategy": "AsIs",
     "rules": [
       {
         "type": "field",
@@ -30,25 +28,18 @@
       "port": 8080,
       "listen": "0.0.0.0",
       "protocol": "vmess",
-      "tag": "proxy-in",
+      "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls"]
       },
       "settings": {
         "clients": [
-          {
-            "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-            "alterId": 0,
-            "security": "auto"
-          }
+          { "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
         ]
       },
       "streamSettings": {
         "network": "ws",
-        "security": "none",
-        "wsSettings": {
-          "path": "/v2ray-endpoint"
-        }
+        "wsSettings": { "path": "/v2ray-endpoint" }
       }
     }
   ],
@@ -60,7 +51,7 @@
     },
     {
       "protocol": "blackhole",
-      "tag": "block"
+      "tag": "block"     
     }
   ]
 }
