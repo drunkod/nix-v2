@@ -20,6 +20,14 @@
       "listen": "0.0.0.0",
       "protocol": "vmess",
       "tag": "proxy-in",
+      "sniffing": {
+          "enabled": true,
+          "destOverride": [
+              "http",
+              "tls"
+          ],
+          "metadataOnly": false
+      },      
       "settings": {
         "clients": [
           {
