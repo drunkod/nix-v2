@@ -11,6 +11,7 @@
       "geosite:category-ads-all": "127.0.0.1"
     },
     "servers": [
+      "https://drunkod-serverless-28.deno.dev/1:ABAACA==",
       "https://1.1.1.1/dns-query",
       "https://dns.google/dns-query",
       "localhost"
