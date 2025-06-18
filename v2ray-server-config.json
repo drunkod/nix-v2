@@ -28,10 +28,7 @@
       "port": 8080,
       "listen": "0.0.0.0",
       "protocol": "vmess",
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
-      },
+      "tag": "proxy-in",
       "settings": {
         "clients": [
           {
