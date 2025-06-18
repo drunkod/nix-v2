@@ -55,6 +55,13 @@
     "rules": [
       {
         "type": "field",
+        "ip": [
+          "geosite:youtube"
+        ],
+        "outboundTag": "block-out"
+      },
+      {
+        "type": "field",
         "domain": [
           "geosite:youtube"
         ],
