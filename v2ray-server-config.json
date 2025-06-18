@@ -1,28 +1,26 @@
 {
   "log": {
-    "error": { "type": "Console", "level": "Warning" },
-    "access": { "type": "Console", "level": "None" }
+    "access": "/dev/null",
+    "error": "/dev/stderr",
+    "loglevel": "debug"
   },
   
   "dns": {
-    "hosts": {
-      "geosite:category-ads-all": "127.0.0.1"
-    },
     "servers": [
-      "https://drunkod-serverless-28.deno.dev/1:ABAACA=="
+      "https://1.1.1.1/dns-query",
+      "https://dns.google/dns-query"
     ]
   },
 
-  "router": {
-    "domainStrategy": "IpIfNonMatch",
-    "rule": [
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
       {
-        "outboundTag": "block",
-        "geoDomain": [ "youtube" ]
-      },
-      {
-        "outboundTag": "dns-out",
-        "protocol": [ "dns" ]
+        "type": "field",
+        "domain": [
+          "geosite:youtube"
+        ],
+        "outboundTag": "block"
       }
     ]
   },
@@ -33,14 +31,24 @@
       "listen": "0.0.0.0",
       "protocol": "vmess",
       "tag": "proxy-in",
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
       "settings": {
         "clients": [
-          { "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "alterId": 0, "security": "auto" }
+          {
+            "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "alterId": 0,
+            "security": "auto"
+          }
         ]
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/v2ray-endpoint" }
+        "security": "none",
+        "wsSettings": {
+          "path": "/v2ray-endpoint"
+        }
       }
     }
   ],
@@ -48,11 +56,7 @@
   "outbounds": [
     {
       "protocol": "freedom",
-      "tag": "direct-out"
-    },
-    {
-      "protocol": "dns",
-      "tag": "dns-out"
+      "tag": "direct-out" 
     },
     {
       "protocol": "blackhole",
