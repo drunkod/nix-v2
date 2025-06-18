@@ -1,8 +1,8 @@
 {
   "log": {
-    "access": "/dev/null",
+    "access": "/dev/stdout",
     "error": "/dev/stderr",
-    "loglevel": "warning"
+    "loglevel": "debug"
   },
   
   "dns": {

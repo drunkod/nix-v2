@@ -1,24 +1,20 @@
 {
   "log": {
-    "access": "/dev/null",
-    "loglevel": "warning"
-  },
-  
-  "dns": {
-    "servers": [
-      "https://1.1.1.1/dns-query"
-    ]
+    "access": "/dev/stdout",
+    "error": "/dev/stderr",
+    "loglevel": "warning" 
   },
 
-  "routing": {
-    "rules": [
-      {
-        "type": "field",
-        "domain": [
-          "geosite:youtube"
-        ],
-        "outboundTag": "block"
-      }
+
+  "dns": {
+    "hosts": {
+
+      "geosite:category-ads-all": "127.0.0.1"
+    },
+    "servers": [
+      "https://1.1.1.1/dns-query",
+      "https://dns.google/dns-query",
+      "localhost"
     ]
   },
 
@@ -27,30 +23,30 @@
       "port": 8080,
       "listen": "0.0.0.0",
       "protocol": "vmess",
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
-      },
+      "tag": "proxy-in", 
       "settings": {
         "clients": [
-          { "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
+          {
+            "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "alterId": 0,
+            "security": "auto"
+          }
         ]
       },
       "streamSettings": {
         "network": "ws",
-        "wsSettings": { "path": "/v2ray-endpoint" }
+        "security": "none",
+        "wsSettings": {
+          "path": "/v2ray-endpoint"
+        }
       }
     }
   ],
-
   "outbounds": [
     {
       "protocol": "freedom",
-      "tag": "direct-out"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
+      "tag": "direct-out",
+      "settings": {}
     }
   ]
 }
