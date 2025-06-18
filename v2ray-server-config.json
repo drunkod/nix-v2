@@ -51,19 +51,12 @@
     }
   ],
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPOnDemand",
     "rules": [
       {
         "type": "field",
         "ip": [
-          "geosite:youtube"
-        ],
-        "outboundTag": "block-out"
-      },
-      {
-        "type": "field",
-        "domain": [
-          "geosite:youtube"
+          "geoip:youtube"
         ],
         "outboundTag": "block-out"
       }
