@@ -2,12 +2,13 @@
   "log": {
     "access": "/dev/stdout",
     "error": "/dev/stderr",
-    "loglevel": "warning"
+    "loglevel": "warning" 
   },
 
 
   "dns": {
     "hosts": {
+
       "geosite:category-ads-all": "127.0.0.1"
     },
     "servers": [
@@ -44,7 +45,7 @@
   "outbounds": [
     {
       "protocol": "freedom",
-      "tag": "direct-out", 
+      "tag": "direct-out",
       "settings": {}
     }
   ]
