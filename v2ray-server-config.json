@@ -51,7 +51,9 @@
     {
       "protocol": "freedom",
       "tag": "direct-out", 
-      "settings": {}
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
     },
     {
       "protocol": "dns",
