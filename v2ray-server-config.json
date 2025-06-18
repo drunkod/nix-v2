@@ -4,12 +4,6 @@
     "error": "/dev/stderr",
     "loglevel": "debug"
   },
-  
-  "dns": {
-    "servers": [
-      "https://1.1.1.1/dns-query"
-    ]
-  },
 
   "routing": {
     "rules": [
