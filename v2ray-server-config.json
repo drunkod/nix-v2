@@ -2,7 +2,7 @@
   "log": {
     "access": "/dev/stdout",
     "error": "/dev/stderr",
-    "loglevel": "warning" 
+    "loglevel": "debug" 
   },
 
 
