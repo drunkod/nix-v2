@@ -1,20 +1,27 @@
 {
   "log": {
-    "access": "/dev/stdout",
+    "access": "/dev/null", 
     "error": "/dev/stderr",
-    "loglevel": "warning" 
+    "loglevel": "warning"
   },
-
-
+  
   "dns": {
-    "hosts": {
-
-      "geosite:category-ads-all": "127.0.0.1"
-    },
     "servers": [
       "https://1.1.1.1/dns-query",
-      "https://dns.google/dns-query",
-      "localhost"
+      "https://dns.google/dns-query"
+    ]
+  },
+
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "geosite:youtube"
+        ],
+        "outboundTag": "block"
+      }
     ]
   },
 
@@ -24,6 +31,10 @@
       "listen": "0.0.0.0",
       "protocol": "vmess",
       "tag": "proxy-in", 
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      },
       "settings": {
         "clients": [
           {
@@ -42,11 +53,17 @@
       }
     }
   ],
+
   "outbounds": [
+
     {
       "protocol": "freedom",
-      "tag": "direct-out",
-      "settings": {}
+      "tag": "direct-out" 
+    },
+
+    {
+      "protocol": "blackhole",
+      "tag": "block"
     }
   ]
 }
