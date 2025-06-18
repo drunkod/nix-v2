@@ -2,13 +2,10 @@
   "log": {
     "access": "/dev/stdout",
     "error": "/dev/stderr",
-    "loglevel": "debug" 
+    "loglevel": "debug"
   },
-
-
   "dns": {
     "hosts": {
-
       "geosite:category-ads-all": "127.0.0.1"
     },
     "servers": [
@@ -17,13 +14,12 @@
       "localhost"
     ]
   },
-
   "inbounds": [
     {
       "port": 8080,
       "listen": "0.0.0.0",
       "protocol": "vmess",
-      "tag": "proxy-in", 
+      "tag": "proxy-in",
       "settings": {
         "clients": [
           {
@@ -47,6 +43,23 @@
       "protocol": "freedom",
       "tag": "direct-out",
       "settings": {}
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block-out",
+      "settings": {}
     }
-  ]
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "geosite:youtube"
+        ],
+        "outboundTag": "block-out"
+      }
+    ]
+  }
 }
