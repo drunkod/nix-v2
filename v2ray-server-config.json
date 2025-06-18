@@ -34,11 +34,16 @@
       },
       "settings": {
         "clients": [
-          { "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
+          {
+            "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "alterId": 0,
+            "security": "auto"
+          }
         ]
       },
       "streamSettings": {
         "network": "ws",
+        "security": "none",
         "wsSettings": { "path": "/v2ray-endpoint" }
       }
     }
