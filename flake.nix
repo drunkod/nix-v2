@@ -79,13 +79,13 @@
             #!${pkgs.stdenv.shell}
             set -euo pipefail
 
-            if [ ! -f warp/wireproxy.conf ]; then
-              echo "Error: warp/wireproxy.conf not found. Run 'nix run .#warp-setup' first."
+            if [ ! -f /root/work/nix-v2/warp/wireproxy.conf ]; then
+              echo "Error: /root/work/nix-v2/warp/wireproxy.conf not found. Run 'nix run .#warp-setup' first."
               exit 1
             fi
 
             echo "Starting wireproxy (SOCKS5 on 127.0.0.1:40000)..."
-            exec ${pkgs.wireproxy}/bin/wireproxy -c warp/wireproxy.conf
+            exec ${pkgs.wireproxy}/bin/wireproxy -c /root/work/nix-v2/warp/wireproxy.conf
           '';
 
           # V2Ray server with WARP egress (requires running warp-proxy)
@@ -101,8 +101,8 @@
             #!${pkgs.stdenv.shell}
             set -euo pipefail
 
-            if [ ! -f warp/wireproxy.conf ]; then
-              echo "Error: warp/wireproxy.conf not found. Run 'nix run .#warp-setup' first."
+            if [ ! -f /root/work/nix-v2/warp/wireproxy.conf ]; then
+              echo "Error: /root/work/nix-v2/warp/wireproxy.conf not found. Run 'nix run .#warp-setup' first."
               exit 1
             fi
 
@@ -115,7 +115,7 @@
             trap cleanup EXIT INT TERM
 
             echo "Starting wireproxy (SOCKS5 on 127.0.0.1:40000)..."
-            ${pkgs.wireproxy}/bin/wireproxy -c warp/wireproxy.conf &
+            ${pkgs.wireproxy}/bin/wireproxy -c /root/work/nix-v2/warp/wireproxy.conf &
             WIREPROXY_PID=$!
 
             echo "Waiting 2 seconds for wireproxy to start..."
