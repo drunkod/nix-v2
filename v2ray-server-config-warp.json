@@ -72,6 +72,17 @@
   ],
   "routing": {
     "domainStrategy": "AsIs",
+     "rules": [
+      {
+        "type": "field",
+        "enabled": false,
+        "_comment": "YouTube blocking is currently disabled",
+        "domain": [
+          "geosite:youtube"
+        ],
+        "outboundTag": "block-out"
+      }
+    ]
     "rules": []
   }
 }
