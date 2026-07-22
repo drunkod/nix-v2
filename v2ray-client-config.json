@@ -20,11 +20,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "YOUR_SERVER_IP_OR_HOSTNAME",
+            "address": "5.35.34.99",
             "port": 8080,
             "users": [
               {
-                "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "id": "f47ac10b-58cc-1234-a567-0e02b2c3d479",
                 "alterId": 0,
                 "security": "auto"
               }
@@ -38,7 +38,7 @@
         "wsSettings": {
           "path": "/v2ray-endpoint",
           "headers": {
-            "Host": "YOUR_SERVER_IP_OR_HOSTNAME"
+            "Host": "5.35.34.99"
           }
         }
       },
