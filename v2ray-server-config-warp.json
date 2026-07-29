@@ -2,7 +2,7 @@
   "log": {
     "access": "/dev/stdout",
     "error": "/dev/stderr",
-    "loglevel": "debug"
+    "loglevel": "warning"
   },
   "dns": {
     "hosts": {
@@ -21,13 +21,13 @@
       "protocol": "vmess",
       "tag": "proxy-in",
       "sniffing": {
-          "enabled": true,
-          "destOverride": [
-              "http",
-              "tls"
-          ],
-          "metadataOnly": false
-      },      
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ],
+        "metadataOnly": false
+      },
       "settings": {
         "clients": [
           {
@@ -76,7 +76,7 @@
       {
         "type": "field",
         "domain": [
-          "geosite:youtube"
+          "geosite:category-ads-all"
         ],
         "outboundTag": "block-out"
       }
