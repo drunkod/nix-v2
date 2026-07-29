@@ -16,6 +16,15 @@
         clientConfig = ./v2ray-client-config.json;
         serverWarpConfig = ./v2ray-server-config-warp.json;
 
+        localClientConfig = pkgs.runCommand "v2ray-local-client-config.json" {
+          nativeBuildInputs = [ pkgs.jq ];
+        } ''
+          jq '
+            (.outbounds[] | select(.protocol == "vmess") | .settings.vnext[0].address) = "127.0.0.1"
+            | (.outbounds[] | select(.protocol == "vmess") | .streamSettings.wsSettings.headers.Host) = "127.0.0.1"
+          ' ${clientConfig} > "$out"
+        '';
+
         mkV2RayRunner = { name, config, messages ? [ ] }:
           pkgs.writeShellScriptBin name ''
             set -euo pipefail
@@ -43,6 +52,52 @@
             exit 1
           fi
         '';
+
+        portToolsShell = ''
+          show_port_owners() {
+            local port="$1"
+            ${pkgs.iproute2}/bin/ss -ltnp "sport = :$port" || true
+            ${pkgs.iproute2}/bin/ss -lunp "sport = :$port" || true
+          }
+
+          require_free_port() {
+            local port="$1"
+            if {
+              ${pkgs.iproute2}/bin/ss -H -ltn "sport = :$port" || true
+              ${pkgs.iproute2}/bin/ss -H -lun "sport = :$port" || true
+            } | ${pkgs.gnugrep}/bin/grep -q .; then
+              echo "Error: port $port is already in use. Stop the old process before starting this stack."
+              show_port_owners "$port"
+              return 1
+            fi
+          }
+
+          wait_for_port() {
+            local pid="$1"
+            local process_name="$2"
+            local port="$3"
+
+            for ((attempt = 1; attempt <= 40; attempt++)); do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "Error: $process_name exited before port $port became ready."
+                wait "$pid" 2>/dev/null || true
+                return 1
+              fi
+
+              if {
+                ${pkgs.iproute2}/bin/ss -H -ltn "sport = :$port" || true
+                ${pkgs.iproute2}/bin/ss -H -lun "sport = :$port" || true
+              } | ${pkgs.gnugrep}/bin/grep -q .; then
+                return 0
+              fi
+
+              ${pkgs.coreutils}/bin/sleep 0.25
+            done
+
+            echo "Error: $process_name did not open port $port within 10 seconds."
+            return 1
+          }
+        '';
       in
       {
         packages = rec {
@@ -60,6 +115,15 @@
             config = clientConfig;
             messages = [
               "Starting V2Ray client with config: ${clientConfig}"
+              "SOCKS5 proxy will be available on 127.0.0.1:10808."
+            ];
+          };
+
+          v2ray-client-local = mkV2RayRunner {
+            name = "run-v2ray-client-local";
+            config = localClientConfig;
+            messages = [
+              "Starting local VPS client against 127.0.0.1:8080."
               "SOCKS5 proxy will be available on 127.0.0.1:10808."
             ];
           };
@@ -125,11 +189,18 @@
           v2ray-server-warp-all = pkgs.writeShellScriptBin "run-v2ray-server-warp-all" ''
             set -euo pipefail
             ${requireWarpConfigShell}
+            ${portToolsShell}
+
+            require_free_port 40000
+            require_free_port 8080
 
             WIREPROXY_PID=""
             V2RAY_PID=""
 
             cleanup() {
+              local status=$?
+              trap - EXIT INT TERM
+
               for pid in "$V2RAY_PID" "$WIREPROXY_PID"; do
                 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
                   kill "$pid" 2>/dev/null || true
@@ -141,6 +212,8 @@
                   wait "$pid" 2>/dev/null || true
                 fi
               done
+
+              exit "$status"
             }
 
             trap cleanup EXIT
@@ -150,31 +223,12 @@
             echo "Starting wireproxy with $wireproxy_config..."
             ${pkgs.wireproxy}/bin/wireproxy -c "$wireproxy_config" &
             WIREPROXY_PID=$!
-
-            ready=false
-            for ((attempt = 1; attempt <= 20; attempt++)); do
-              if ! kill -0 "$WIREPROXY_PID" 2>/dev/null; then
-                echo "Error: wireproxy exited before its SOCKS5 listener became ready."
-                wait "$WIREPROXY_PID" || true
-                exit 1
-              fi
-
-              if (echo > /dev/tcp/127.0.0.1/40000) >/dev/null 2>&1; then
-                ready=true
-                break
-              fi
-
-              ${pkgs.coreutils}/bin/sleep 0.25
-            done
-
-            if [ "$ready" != "true" ]; then
-              echo "Error: wireproxy did not open 127.0.0.1:40000 in time."
-              exit 1
-            fi
+            wait_for_port "$WIREPROXY_PID" "wireproxy" 40000
 
             echo "Starting V2Ray server with WARP egress..."
             ${v2rayPackage}/bin/v2ray run -config ${serverWarpConfig} &
             V2RAY_PID=$!
+            wait_for_port "$V2RAY_PID" "V2Ray server" 8080
 
             set +e
             wait -n "$WIREPROXY_PID" "$V2RAY_PID"
@@ -190,16 +244,151 @@
             exit "$status"
           '';
 
+          v2ray-stack = pkgs.writeShellScriptBin "run-v2ray-stack" ''
+            set -euo pipefail
+            ${requireWarpConfigShell}
+            ${portToolsShell}
+
+            require_free_port 10808
+
+            SERVER_STACK_PID=""
+            CLIENT_PID=""
+
+            cleanup() {
+              local status=$?
+              trap - EXIT INT TERM
+
+              for pid in "$CLIENT_PID" "$SERVER_STACK_PID"; do
+                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                  kill "$pid" 2>/dev/null || true
+                fi
+              done
+
+              for pid in "$CLIENT_PID" "$SERVER_STACK_PID"; do
+                if [ -n "$pid" ]; then
+                  wait "$pid" 2>/dev/null || true
+                fi
+              done
+
+              exit "$status"
+            }
+
+            trap cleanup EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+
+            echo "Starting supervised WARP server stack..."
+            ${v2ray-server-warp-all}/bin/run-v2ray-server-warp-all &
+            SERVER_STACK_PID=$!
+            wait_for_port "$SERVER_STACK_PID" "WARP server stack" 8080
+
+            echo "Starting local V2Ray client..."
+            ${v2ray-client-local}/bin/run-v2ray-client-local &
+            CLIENT_PID=$!
+            wait_for_port "$CLIENT_PID" "V2Ray client" 10808
+
+            echo "All services are ready: wireproxy=:40000, server=:8080, client=:10808"
+
+            set +e
+            wait -n "$SERVER_STACK_PID" "$CLIENT_PID"
+            status=$?
+            set -e
+
+            if ! kill -0 "$SERVER_STACK_PID" 2>/dev/null; then
+              echo "WARP server stack stopped; shutting down the local client."
+            elif ! kill -0 "$CLIENT_PID" 2>/dev/null; then
+              echo "Local V2Ray client stopped; shutting down the WARP server stack."
+            fi
+
+            exit "$status"
+          '';
+
+          vps-install = pkgs.writeShellScriptBin "install-v2ray-warp-systemd" ''
+            set -euo pipefail
+
+            if [ "$(id -u)" -ne 0 ]; then
+              echo "Error: run this installer as root."
+              exit 1
+            fi
+
+            if ! command -v systemctl >/dev/null 2>&1; then
+              echo "Error: systemctl is not available on this VPS."
+              exit 1
+            fi
+
+            state_dir="''${WARP_DIR:-/var/lib/nix-v2ray-warp}"
+            profile="/nix/var/nix/profiles/nix-v2ray-warp"
+            unit_name="nix-v2ray-warp.service"
+            unit_path="/etc/systemd/system/$unit_name"
+
+            mkdir -p "$state_dir"
+            chmod 700 "$state_dir"
+
+            if [ ! -f "$state_dir/wireproxy.conf" ]; then
+              echo "Error: $state_dir/wireproxy.conf does not exist."
+              echo "Prepare it first with:"
+              echo "  WARP_DIR=$state_dir nix --extra-experimental-features 'nix-command flakes' run .#warp-setup"
+              exit 1
+            fi
+
+            systemctl stop "$unit_name" >/dev/null 2>&1 || true
+
+            ${portToolsShell}
+            require_free_port 40000
+            require_free_port 8080
+            require_free_port 10808
+
+            echo "Installing the supervised stack into the persistent Nix profile $profile..."
+            ${pkgs.nix}/bin/nix-env -p "$profile" -i ${v2ray-stack}
+
+            cat > "$unit_path" <<UNIT
+[Unit]
+Description=V2Ray server, local client and Cloudflare WARP proxy
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=$state_dir
+Environment="WARP_DIR=$state_dir"
+ExecStart=$profile/bin/run-v2ray-stack
+Restart=always
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+UMask=0077
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+            chmod 644 "$unit_path"
+            systemctl daemon-reload
+            systemctl enable "$unit_name"
+            systemctl restart "$unit_name"
+
+            echo "Installed and started $unit_name"
+            echo "Status: systemctl status $unit_name"
+            echo "Logs:   journalctl -u $unit_name -f"
+          '';
+
           default = v2ray-server;
         };
 
         apps = rec {
           server = mkApp self.packages.${system}.v2ray-server "run-v2ray-server";
           client = mkApp self.packages.${system}.v2ray-client "run-v2ray-client";
+          client-local = mkApp self.packages.${system}.v2ray-client-local "run-v2ray-client-local";
           warp-setup = mkApp self.packages.${system}.warp-setup "warp-setup";
           warp-proxy = mkApp self.packages.${system}.warp-proxy "warp-proxy";
           server-warp = mkApp self.packages.${system}.v2ray-server-warp "run-v2ray-server-warp";
           server-warp-all = mkApp self.packages.${system}.v2ray-server-warp-all "run-v2ray-server-warp-all";
+          stack = mkApp self.packages.${system}.v2ray-stack "run-v2ray-stack";
+          vps-install = mkApp self.packages.${system}.vps-install "install-v2ray-warp-systemd";
           default = server;
         };
 
@@ -208,6 +397,7 @@
         } ''
           jq empty ${serverConfig}
           jq empty ${clientConfig}
+          jq empty ${localClientConfig}
           jq empty ${serverWarpConfig}
           touch "$out"
         '';
@@ -217,14 +407,16 @@
           packages = [
             v2rayPackage
             pkgs.curl
+            pkgs.iproute2
             pkgs.jq
             pkgs.wgcf
             pkgs.wireproxy
           ];
           shellHook = ''
-            echo "V2Ray dev shell: v2ray, wgcf, wireproxy, curl and jq are available."
+            echo "V2Ray dev shell: v2ray, wgcf, wireproxy, curl, iproute2 and jq are available."
             echo "Server config: ${serverConfig}"
             echo "Client config: ${clientConfig}"
+            echo "Local client:  ${localClientConfig}"
             echo "WARP config:   ${serverWarpConfig}"
           '';
         };
