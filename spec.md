@@ -1,133 +1,197 @@
-# Spec: WARP-egress для V2Ray через wgcf + wireproxy
+# Спецификация: V2Ray с WARP-egress через wgcf и wireproxy
 
-## Проблема
+## Цель
 
-V2Ray сервер выходит в интернет через IP VPS (`freedom` outbound). Сервисы блокирующие IP хостинг-провайдеров недоступны через прокси. Нужно направить исходящий трафик через Cloudflare WARP.
+Направить исходящий трафик V2Ray через Cloudflare WARP без привязки к конкретному пути checkout, сохранить прямой режим работы сервера и клиента и обеспечить стабильный запуск на VPS через systemd.
 
 ## Архитектура
 
-```
-Клиент → V2Ray-сервер (:8080) → SOCKS5 warp-out → wireproxy (:40000) → Cloudflare WARP → Интернет
-```
-
-- **wgcf** — регистрирует WARP-аккаунт, генерирует WireGuard-профиль
-- **wireproxy** — userspace WireGuard-клиент, поднимает SOCKS5 на `127.0.0.1:40000`
-- **V2Ray** — outbound `warp-out` типа `socks` → wireproxy; первый outbound = дефолт для всего трафика
-
-Оба пакета (`wgcf`, `wireproxy`) доступны в nixpkgs.
-
-## Файлы: создать/изменить
-
-| Файл | Действие | Описание |
-|---|---|---|
-| `.gitignore` | Изменить | Добавить `warp/` (секреты WARP) |
-| `v2ray-server-config-warp.json` | Создать | Серверный конфиг с WARP outbound |
-| `flake.nix` | Заменить | Добавить warp-setup, warp-proxy, server-warp, server-warp-all packages/apps; wgcf+wireproxy в devShell |
-| `README.md` | Обновить | Пошаговая инструкция |
-
-Существующие конфиги и apps остаются без изменений.
-
-## Детали реализации
-
-### 1. `.gitignore`
-
-Добавить:
-```
-warp/
+```text
+Удалённый клиент → V2Ray-сервер (:8080) → SOCKS5 warp-out → wireproxy (:40000) → Cloudflare WARP → Интернет
 ```
 
-### 2. `v2ray-server-config-warp.json`
+Для локальной проверки на VPS полный stack также запускает V2Ray client:
 
-- Inbounds: vmess на :8080 (как в текущем `v2ray-server-config.json`)
-- Outbounds (порядок важен — первый = дефолт):
-  1. `warp-out` — `socks` → `127.0.0.1:40000`
-  2. `direct-out` — `freedom`
-  3. `block-out` — `blackhole`
-- Routing: `geosite:category-ads-all` → `block-out`
-- Log level: `warning`
-
-### 3. `flake.nix`
-
-Новые packages:
-
-- **`warp-setup`** — одноразовый скрипт:
-  - Создаёт `warp/` директорию
-  - `wgcf register --accept-tos` (идемпотентно — пропускает если `wgcf-account.toml` существует)
-  - `wgcf generate` → `wgcf-profile.conf`
-  - Копирует профиль в `wireproxy.conf`, дописывает `[Socks5]\nBindAddress = 127.0.0.1:40000`
-
-- **`warp-proxy`** — запуск wireproxy:
-  - Проверяет наличие `warp/wireproxy.conf`
-  - `exec wireproxy -c warp/wireproxy.conf`
-
-- **`v2ray-server-warp`** — V2Ray с WARP-конфигом:
-  - `exec v2ray run -config v2ray-server-config-warp.json`
-
-- **`v2ray-server-warp-all`** — всё в одном процессе:
-  - Запускает wireproxy в фоне
-  - Ждёт 2 секунды
-  - Запускает V2Ray
-  - `trap` для cleanup при выходе
-
-Новые apps: `warp-setup`, `warp-proxy`, `server-warp`, `server-warp-all`
-
-DevShell: добавить `pkgs.wgcf`, `pkgs.wireproxy`
-
-Существующие packages/apps (`v2ray-server`, `v2ray-client`, `v2ray`) — без изменений.
-
-### 4. Структура `warp/` (создаётся `warp-setup`, в `.gitignore`)
-
+```text
+curl → local V2Ray client (:10808) → V2Ray server (:8080) → wireproxy (:40000) → WARP
 ```
+
+- **wgcf** регистрирует WARP-аккаунт и создаёт WireGuard-профиль.
+- **wireproxy** запускает userspace WireGuard-клиент и SOCKS5 listener на `127.0.0.1:40000`.
+- **V2Ray server** использует `warp-out` как первый и поэтому основной outbound.
+- **V2Ray local client** слушает `127.0.0.1:10808` и подключается к серверу на `127.0.0.1:8080`.
+- Рекламные домены `geosite:category-ads-all` направляются в `block-out`.
+
+## WARP state
+
+По умолчанию команды используют:
+
+```text
+$PWD/warp
+```
+
+Путь можно переопределить переменной окружения:
+
+```bash
+export WARP_DIR=/var/lib/nix-v2ray-warp
+```
+
+Фактический путь вычисляется как `${WARP_DIR:-$PWD/warp}`. Одинаковое значение должно использоваться при setup и запуске wireproxy.
+
+Структура директории:
+
+```text
 warp/
 ├── wgcf-account.toml   # секрет
 ├── wgcf-profile.conf   # секрет
-└── wireproxy.conf       # секрет (профиль + [Socks5] секция)
+└── wireproxy.conf      # секрет: профиль + секция [Socks5]
 ```
 
-## Доступные команды после реализации
+Директория `warp/` находится в `.gitignore`. Скрипт setup использует `umask 077` и устанавливает права `0600` на созданные файлы.
 
-| Команда | Назначение |
+Для systemd deployment состояние по умолчанию хранится в `/var/lib/nix-v2ray-warp` с правами `0700` на директорию.
+
+## Конфигурация V2Ray
+
+`v2ray-server-config-warp.json` повторяет inbound основного серверного конфига и содержит следующие outbounds в указанном порядке:
+
+1. `warp-out`: SOCKS5 на `127.0.0.1:40000`.
+2. `direct-out`: `freedom` для явных правил прямого выхода.
+3. `block-out`: `blackhole` для блокировки.
+
+Параметры:
+
+- log level: `warning`;
+- routing: `geosite:category-ads-all` → `block-out`;
+- `warp-out` остаётся первым outbound и используется по умолчанию.
+
+Локальный VPS client генерируется из `v2ray-client-config.json`. Адрес VMess server и WebSocket Host переопределяются на `127.0.0.1`, остальные настройки, включая UUID, сохраняются.
+
+## Flake interface
+
+### Packages
+
+- `v2ray-server` — сервер с прямым egress.
+- `v2ray-client` — клиент, использующий обычный client config.
+- `v2ray-client-local` — локальный VPS client с SOCKS5 на `127.0.0.1:10808`.
+- `v2ray` — V2Ray package из nixpkgs.
+- `warp-setup` — идемпотентная регистрация аккаунта и генерация конфигов.
+- `warp-proxy` — запуск wireproxy с конфигом из WARP state directory.
+- `v2ray-server-warp` — V2Ray с WARP outbound config.
+- `v2ray-server-warp-all` — совместный запуск wireproxy и V2Ray server.
+- `v2ray-stack` — supervision wireproxy, V2Ray server и local V2Ray client.
+- `vps-install` — установка или обновление полного stack как systemd service.
+
+Повторяющаяся логика запуска V2Ray и объявления apps вынесена в helper-функции. Default package и default app указывают на прямой V2Ray server.
+
+### Apps
+
+| App | Назначение |
 |---|---|
-| `nix run .#server` | V2Ray сервер, прямой выход (без изменений) |
-| `nix run .#client` | V2Ray клиент (без изменений) |
-| `nix run .#warp-setup` | Регистрация WARP + генерация конфигов (один раз) |
-| `nix run .#warp-proxy` | wireproxy — SOCKS5 на :40000 |
-| `nix run .#server-warp` | V2Ray сервер через WARP (нужен запущенный warp-proxy) |
-| `nix run .#server-warp-all` | wireproxy + V2Ray в одном процессе |
+| `server` | V2Ray server с прямым egress |
+| `client` | обычный V2Ray client |
+| `client-local` | local VPS client → `127.0.0.1:8080` |
+| `warp-setup` | подготовка WARP state |
+| `warp-proxy` | wireproxy SOCKS5 listener |
+| `server-warp` | V2Ray через уже запущенный wireproxy |
+| `server-warp-all` | supervision wireproxy и server |
+| `stack` | supervision всех трёх процессов |
+| `vps-install` | установка/обновление systemd unit |
 
-## Порядок запуска на сервере
+## Process lifecycle
+
+### `server-warp-all`
+
+1. Проверяет наличие `wireproxy.conf`.
+2. Проверяет, что порты `40000` и `8080` свободны.
+3. Запускает wireproxy.
+4. Ожидает listener `127.0.0.1:40000` вместо фиксированной задержки.
+5. Запускает V2Ray server.
+6. Ожидает listener `8080`.
+7. Ожидает завершения любого процесса.
+8. Завершает оставшийся процесс и выполняет `wait` при нормальном выходе, ошибке, Ctrl+C или SIGTERM.
+
+### `stack`
+
+1. Проверяет, что порт `10808` свободен.
+2. Запускает `server-warp-all` и ожидает server listener `8080`.
+3. Запускает local client и ожидает listener `10808`.
+4. Ожидает завершения server stack или client.
+5. При завершении любого компонента останавливает оставшиеся процессы.
+
+Такое поведение исключает тихое накопление дублирующих процессов после ручных запусков.
+
+## systemd deployment
+
+`vps-install`:
+
+1. требует root и наличие systemd;
+2. использует `${WARP_DIR:-/var/lib/nix-v2ray-warp}`;
+3. проверяет `wireproxy.conf`;
+4. останавливает прежний `nix-v2ray-warp.service`;
+5. отказывается продолжать, пока порты `40000`, `8080` или `10808` заняты сторонними процессами;
+6. устанавливает `v2ray-stack` в persistent Nix profile `/nix/var/nix/profiles/nix-v2ray-warp`, создающий GC root;
+7. создаёт и включает `/etc/systemd/system/nix-v2ray-warp.service`;
+8. запускает unit с `Restart=always` и `RestartSec=5`.
+
+Логи направляются в journald. Cron и `nohup` для production запуска не используются.
+
+## Validation
+
+`checks.config-json` запускает `jq empty` для server, client, сгенерированного local client и WARP JSON configs. Поэтому `nix flake check` проверяет evaluation flake и синтаксис этих конфигов.
+
+Dev shell содержит:
+
+- `v2ray`;
+- `wgcf`;
+- `wireproxy`;
+- `curl`;
+- `iproute2`;
+- `jq`.
+
+## Порядок запуска
 
 ```bash
-# Одноразово:
+# Опционально: хранить секреты вне checkout
+export WARP_DIR=/var/lib/nix-v2ray-warp
+
+# Один раз
 nix run .#warp-setup
 
-# Запуск (вариант A — два терминала):
-nix run .#warp-proxy        # терминал 1
-nix run .#server-warp       # терминал 2
+# Вариант A: отдельные процессы
+nix run .#warp-proxy
+nix run .#server-warp
 
-# Запуск (вариант B — один терминал):
+# Вариант B: wireproxy + server
 nix run .#server-warp-all
+
+# Вариант C: wireproxy + server + local client
+nix run .#stack
+
+# Production systemd deployment
+nix run .#vps-install
 ```
 
-## Acceptance Criteria
+## Проверка egress
 
-1. `nix run .#warp-setup` создаёт `warp/` с `wgcf-account.toml`, `wgcf-profile.conf`, `wireproxy.conf`
-2. `nix run .#warp-proxy` запускает wireproxy, SOCKS5 доступен на `127.0.0.1:40000`
-3. `nix run .#server-warp` запускает V2Ray с WARP-egress конфигом
-4. `nix run .#server-warp-all` запускает оба процесса, корректно завершает при Ctrl+C
-5. Клиентский трафик выходит через Cloudflare WARP IP:
-   - `curl --socks5-hostname 127.0.0.1:10808 https://ifconfig.me` → IP Cloudflare (не VPS)
-   - `curl --socks5-hostname 127.0.0.1:10808 https://cloudflare.com/cdn-cgi/trace` → `warp=on`
-6. `warp/` в `.gitignore` — секреты не попадают в git
-7. Существующие apps (`server`, `client`) работают как раньше (обратная совместимость)
-8. `nix flake check` проходит без ошибок
+После запуска полного stack:
 
-## Completion Criteria (когда задача считается выполненной)
+```bash
+curl --socks5-hostname 127.0.0.1:10808 https://ifconfig.me
+curl --socks5-hostname 127.0.0.1:10808 https://cloudflare.com/cdn-cgi/trace
+```
 
-Задача завершена когда:
-- Все 4 файла созданы/изменены согласно спецификации
-- `nix flake check` проходит (или `nix flake show` показывает все packages/apps)
-- Конфиги валидны (JSON парсится, Nix evaluates)
-- README содержит пошаговую инструкцию
+Ожидаемый результат: Cloudflare exit IP и `warp=on`.
 
-⚠️ Полная end-to-end проверка (WARP IP на выходе) возможна только на реальном сервере с сетевым доступом, не в dev container.
+## Acceptance criteria
+
+1. Нет абсолютной зависимости от `/root/work/nix-v2` или другого checkout path.
+2. `warp-setup` сохраняет account/profile при повторном запуске и безопасно пересоздаёт `wireproxy.conf`.
+3. Runtime commands используют `${WARP_DIR:-$PWD/warp}`, а systemd deployment использует постоянный state directory.
+4. `server-warp-all` проверяет readiness и корректно очищает оба процесса.
+5. `stack` запускает и контролирует порты `40000`, `8080` и `10808` без дублирующих процессов.
+6. systemd unit автоматически запускается после boot и перезапускает полный stack после crash.
+7. WARP config использует `warning` и блокирует `geosite:category-ads-all`, а не YouTube.
+8. Apps `server` и `client` сохраняют прежнее поведение.
+9. `nix flake check` проходит и JSON configs валидны.
+10. Полная end-to-end проверка WARP выполняется на сервере с сетевым доступом.
