@@ -34,13 +34,15 @@ All examples below assume root access, matching a typical single-user Nix instal
 
 ## 2. Enable flakes for the shell
 
-You can keep using explicit flags:
+You can keep using explicit flags through a shell function:
 
 ```bash
-NIX="nix --extra-experimental-features 'nix-command flakes'"
+nixf() {
+  nix --extra-experimental-features 'nix-command flakes' "$@"
+}
 ```
 
-Commands below use `$NIX`. Alternatively, enable `nix-command` and `flakes` permanently in the appropriate Nix configuration for your installation.
+Commands below use `nixf`. Alternatively, enable `nix-command` and `flakes` permanently in the appropriate Nix configuration for your installation.
 
 ## 3. Stop old unmanaged processes
 
@@ -86,7 +88,7 @@ test -f /var/lib/nix-v2ray-warp/wireproxy.conf
 ### Or register a new WARP account
 
 ```bash
-WARP_DIR=/var/lib/nix-v2ray-warp $NIX run .#warp-setup
+WARP_DIR=/var/lib/nix-v2ray-warp nixf run .#warp-setup
 ```
 
 Keep this directory private because it contains WARP credentials.
@@ -94,7 +96,7 @@ Keep this directory private because it contains WARP credentials.
 ## 5. Validate the flake and configuration
 
 ```bash
-$NIX flake check
+nixf flake check
 ```
 
 Also ensure the VMess UUID in `v2ray-server-config-warp.json` matches the UUID in `v2ray-client-config.json`.
@@ -102,7 +104,7 @@ Also ensure the VMess UUID in `v2ray-server-config-warp.json` matches the UUID i
 ## 6. Test all three processes in the foreground
 
 ```bash
-WARP_DIR=/var/lib/nix-v2ray-warp $NIX run .#stack
+WARP_DIR=/var/lib/nix-v2ray-warp nixf run .#stack
 ```
 
 Expected final message:
@@ -130,7 +132,7 @@ Stop the foreground test with `Ctrl+C`. The supervisor should stop all three chi
 ## 7. Install and start the systemd service
 
 ```bash
-WARP_DIR=/var/lib/nix-v2ray-warp $NIX run .#vps-install
+WARP_DIR=/var/lib/nix-v2ray-warp nixf run .#vps-install
 ```
 
 The installer:
@@ -196,8 +198,8 @@ systemctl enable --now nix-v2ray-warp.service
 ```bash
 cd /root/work/nix-v2
 git pull --ff-only origin warp
-$NIX flake check
-WARP_DIR=/var/lib/nix-v2ray-warp $NIX run .#vps-install
+nixf flake check
+WARP_DIR=/var/lib/nix-v2ray-warp nixf run .#vps-install
 ```
 
 Running `vps-install` again updates the persistent Nix profile, rewrites the unit, and restarts the service.
@@ -261,6 +263,6 @@ If this fails, inspect the journal for wireproxy errors and consider regeneratin
 systemctl stop nix-v2ray-warp.service
 mv /var/lib/nix-v2ray-warp/wgcf-profile.conf \
    /var/lib/nix-v2ray-warp/wgcf-profile.conf.backup
-WARP_DIR=/var/lib/nix-v2ray-warp $NIX run .#warp-setup
+WARP_DIR=/var/lib/nix-v2ray-warp nixf run .#warp-setup
 systemctl start nix-v2ray-warp.service
 ```
