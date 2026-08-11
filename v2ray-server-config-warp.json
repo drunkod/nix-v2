@@ -19,12 +19,7 @@
       "protocol": "vmess",
       "tag": "proxy-in",
       "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ],
-        "metadataOnly": false
+        "enabled": false
       },
       "settings": {
         "clients": [
