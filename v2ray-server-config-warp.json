@@ -72,7 +72,36 @@
     "domainStrategy": "AsIs",
     "rules": [
       {
+  "type": "field",
+  "inboundTag": [
+    "proxy-in"
+  ],
+  "port": "7844",
+  "network": "tcp",
+  "outboundTag": "direct-out"
+},
+    {
+      "type": "field",
+      "domain": [
+        "domain:argotunnel.com"
+      ],
+      "port": "7844",
+      "network": "tcp",
+      "outboundTag": "direct-out"
+    },
+    {
+      "type": "field",
+      "ip": [
+        "198.41.192.0/24",
+        "198.41.200.0/24"
+      ],
+      "port": "7844",
+      "network": "tcp",
+      "outboundTag": "direct-out"
+    },
+      {
         "type": "field",
+        "enabled": false,
         "domain": [
           "geosite:category-ads-all"
         ],
